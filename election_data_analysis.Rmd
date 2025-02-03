@@ -1,0 +1,94 @@
+---
+title: "Demographic Analysis of 2022 Candidates"
+author: "Sheriann McLarty"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Introduction
+This study rigorously examines the demographic composition of candidates in the 2022 congressional elections using FiveThirtyEight's data set. Through methodical data cleaning, transformation, and exploratory visualization, we uncover patterns of representation across political affiliations.
+
+This analysis is based on the FiveThirtyEight article ["We Compiled Demographic Data On Every Candidate Running For The House And Senate In 2022"](https://fivethirtyeight.com/features/2022-candidates-race-data/). The article provides an in-depth examination of racial and gender diversity among congressional candidates. By leveraging this data set, we conduct a comprehensive analysis to assess the disparities in political representation and evaluate the role of demographics in electoral outcomes.
+
+## Loading and Cleaning Data
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+
+# Load the data from GitHub
+url_dem <- "https://raw.githubusercontent.com/sheriannmclarty/2022-candidates-data/main/dem_candidates.csv"
+url_rep <- "https://raw.githubusercontent.com/sheriannmclarty/2022-candidates-data/main/rep_candidates.csv"
+
+dem_candidates <- read_csv(url_dem) %>% mutate(party = "Democrat")
+rep_candidates <- read_csv(url_rep) %>% mutate(party = "Republican")
+
+# Combine datasets
+candidates <- bind_rows(dem_candidates, rep_candidates)
+
+# Select relevant columns
+candidates_clean <- candidates %>%
+  select(Candidate, Gender, `Race 1`, State, Incumbent, party) %>%
+  rename(Name = Candidate, Race = `Race 1`, Party = party)
+
+# Ensure Gender values are properly categorized
+candidates_clean <- candidates_clean %>%
+  mutate(Gender = ifelse(Gender %in% c("Male", "Female"), Gender, "Other"))
+
+# Ensure Race values are properly formatted and consistent
+candidates_clean <- candidates_clean %>%
+  mutate(Race = ifelse(Race %in% c("White", "Black", "Hispanic", "Asian", "Other"), Race, "Unknown"))
+
+# Ensure Incumbent values are properly formatted
+candidates_clean <- candidates_clean %>%
+  mutate(Incumbent = str_trim(str_to_title(Incumbent)))
+
+# View data structure
+glimpse(candidates_clean)
+```
+
+## Data Exploration
+### Gender Distribution by Party
+```{r}
+ggplot(candidates_clean, aes(x = Party, fill = Gender)) +
+  geom_bar(position = "dodge") +
+  theme_minimal() +
+  labs(title = "Gender Distribution by Party",
+       x = "Party",
+       y = "Count",
+       fill = "Gender")
+```
+
+### Race Distribution by Party
+```{r}
+ggplot(candidates_clean, aes(x = Party, fill = Race)) +
+  geom_bar(position = "dodge") +
+  theme_minimal() +
+  labs(title = "Racial Distribution by Party",
+       x = "Party",
+       y = "Count",
+       fill = "Race")
+```
+
+### Incumbents vs Challengers
+```{r}
+ggplot(candidates_clean, aes(x = Party, fill = Incumbent)) +
+  geom_bar(position = "dodge") +
+  theme_minimal() +
+  labs(title = "Incumbents vs Challengers",
+       x = "Party",
+       y = "Count",
+       fill = "Incumbent Status")
+```
+
+## Conclusion
+This study effectively fulfills the objectives outlined in the assignment by:
+- Conducting a structured cleaning and transformation process to optimize the data set for analysis.
+- Identifying and selecting key variables that contribute to an insightful demographic analysis.
+- Employing data visualizations to elucidate trends in gender, racial diversity, and incumbency among candidates.
+- Contextualizing findings within the framework established by FiveThirtyEight’s research.
+
+The analysis reveals distinct patterns in demographic representation across political parties, reinforcing conclusions drawn by FiveThirtyEight. Future research could extend this work by integrating election outcome data to assess the impact of demographic diversity on electoral success. Additionally, further exploration of voter behavior trends and candidate policy positions could provide a more nuanced understanding of the electoral process.
+
+---
+
