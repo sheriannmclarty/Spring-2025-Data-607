@@ -1,0 +1,100 @@
+---
+title: "Week 3 Assignment - DATA 607"
+author: "Sheriann McLarty"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## 1. Identifying Majors with "DATA" or "STATISTICS"**
+
+# Load necessary library
+```{r}
+library(dplyr)
+library(knitr) # For better table display
+library(stringr) # For string manipulation and regex testing
+```
+# Load the dataset 
+```{r}
+url <- "https://raw.githubusercontent.com/sheriannmclarty/Identifying-Majors/refs/heads/main/majors-list.csv"
+majors <- read.csv(url, stringsAsFactors = FALSE)
+```
+
+# Filter for majors that contain "DATA" or "STATISTICS"
+```{r}
+filtered_majors <- majors %>%
+  filter(grepl("DATA|STATISTICS", Major, ignore.case = TRUE))
+```
+
+# Display the result
+```{r}
+kable(filtered_majors) # Provides a clear table format
+```
+
+# 2.Transforming the List of Fruits into a Vector
+
+# Original list of fruits
+```{r}
+fruits <- c(
+  "bell pepper", "bilberry", "blackberry", "blood orange",
+  "blueberry", "cantaloupe", "chili pepper", "cloudberry",
+  "elderberry", "lime", "lychee", "mulberry",
+  "olive", "salal berry"
+)
+```
+
+# Printing as a vector
+
+```{r}
+print(fruits)
+```
+
+
+#3. Descriptions of Regular Expressions
+
+```{r}
+# Visualizing regex matches
+library(stringr)
+library(ggplot2)
+#  Use the fruit dataset as test cases
+test_words <- fruits
+```
+
+# Apply regex and show matches
+
+```{r}
+matches_regex1 <- str_view_all(test_words, "(.)\\1\\1")
+matches_regex2 <- str_view_all(test_words, "(.)(.)\\2\\1")
+matches_regex3 <- str_view_all(test_words, "(..)\\1")
+matches_regex4 <- str_view_all(test_words, "(.).\\1.\\1")
+matches_regex5 <- str_view_all(test_words, "(.)(.)(.).*\\3\\2\\1")
+
+list(
+  "Triple Repeats" = matches_regex1,
+  "Four-Char Palindrome" = matches_regex2,
+  "Repeated Pair" = matches_regex3,
+  "Character Repeat w/ One in Between" = matches_regex4,
+  "Reversed Sequence" = matches_regex5
+)
+
+```
+
+# 4. Constructing Regular Expressions
+
+```{r}
+# Apply regex and visualize
+matches_regex1 <- str_view(fruits, "^(.)\\1$")
+matches_regex2 <- str_view(fruits, "(..).*\\1")
+matches_regex3 <- str_view(fruits, "(.).*?\\1.*?\\1")
+
+list(
+  "Start & End Same" = matches_regex1,
+  "Repeated Pair" = matches_regex2,
+  "Letter Repeats 3x" = matches_regex3
+)
+```
+
+
+
+
