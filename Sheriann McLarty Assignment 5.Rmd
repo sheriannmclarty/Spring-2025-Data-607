@@ -1,0 +1,191 @@
+---
+title: "Flight Delay Analysis and Forecasting Assignment 5"
+author: "Sheriann McLarty"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Introduction**  
+This analysis examines flight delays from Alaska Airlines and AM West. We clean the data, explore trends, compare airline performance, and attempt to forecast future delays. Due to dataset limitations, alternative approaches are also discussed.
+
+---
+
+**Load Necessary Libraries**  
+```{r}
+library(tidyverse)
+library(tsibble)
+library(fable)
+library(fabletools)
+library(lubridate)
+```
+
+---
+
+**Read & Clean Data**  
+* The dataset is transformed from wide to long format for better analysis.
+* Missing values are populated to ensure data integrity.
+* A Date column is created for structured time-series analysis.
+
+```{r}
+# Create the dataset
+airline_delays <- data.frame(
+  Airline = c("ALASKA", "ALASKA", "AM WEST", "AM WEST"),
+  Status = c("On Time", "Delayed", "On Time", "Delayed"),
+  Los_Angeles = c(497, 62, 694, 117),
+  Phoenix = c(221, 12, 4840, 415),
+  San_Diego = c(212, 20, 383, 65),
+  San_Francisco = c(503, 102, 320, 129),
+  Seattle = c(1841, 305, 201, 61)
+)
+
+# Save CSV (Only if not already created)
+if (!file.exists("airline_delays.csv")) {
+  write.csv(airline_delays, "airline_delays.csv", row.names = FALSE)
+}
+
+# Read the CSV file
+df <- read_csv("airline_delays.csv", show_col_types = FALSE)
+
+# Transform data from wide to long format
+df_tidy <- df %>%
+  pivot_longer(cols = c("Los_Angeles", "Phoenix", "San_Diego", "San_Francisco", "Seattle"),
+               names_to = "Destination",
+               values_to = "Flight_Count") %>%
+  mutate(Date = seq.Date(from = as.Date("2023-01-01"), by = "days", length.out = n()))
+```
+
+---
+
+**Aggregate Data for Analysis**  
+```{r}
+df_ts <- df_tidy %>%
+  group_by(Date, Airline, Status) %>%
+  summarise(Total_Flight_Count = sum(Flight_Count), .groups = "drop") %>%
+  as_tsibble(index = Date, key = c(Airline, Status))
+```
+
+---
+
+**Percentage-Based Comparison of Delays (Overall)**  
+```{r}
+# Compute percentage of delayed flights per airline
+delay_percentage <- df_tidy %>%
+  group_by(Airline, Status) %>%
+  summarise(Total_Flights = sum(Flight_Count), .groups = "drop") %>%
+  pivot_wider(names_from = Status, values_from = Total_Flights, values_fill = 0) %>%
+  mutate(Delay_Percentage = (Delayed / (Delayed + `On Time`)) * 100)
+
+print(delay_percentage)
+
+# Visualization
+ggplot(delay_percentage, aes(x = Airline, y = Delay_Percentage, fill = Airline)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Percentage of Delayed Flights by Airline",
+       x = "Airline",
+       y = "Percentage of Delayed Flights (%)") +
+  theme_minimal()
+```
+
+---
+
+**Percentage-Based Comparison of Delays (City-Level)**  
+```{r}
+# Compute delay percentage per city
+delay_percentage_city <- df_tidy %>%
+  group_by(Airline, Destination, Status) %>%
+  summarise(Total_Flights = sum(Flight_Count), .groups = "drop") %>%
+  pivot_wider(names_from = Status, values_from = Total_Flights, values_fill = 0) %>%
+  mutate(Delay_Percentage = (Delayed / (Delayed + `On Time`)) * 100)
+
+print(delay_percentage_city)
+
+# Visualization
+ggplot(delay_percentage_city, aes(x = Destination, y = Delay_Percentage, fill = Airline)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Percentage of Delayed Flights Across Cities",
+       x = "City",
+       y = "Percentage of Delayed Flights (%)") +
+  theme_minimal()
+```
+
+---
+
+**Discrepancy Between Overall and City-Based Performance**  
+```{r}
+## Observations:
+# - AM West has a higher overall delay percentage than Alaska Airlines.
+# - However, some cities (e.g., San Francisco) show high delays for both airlines.
+# - This suggests that looking at total airline performance alone can be misleading.
+
+## Explanation:
+# - City-level delays may be influenced by external factors (e.g., weather, airport congestion).
+# - Some cities might experience fewer delays due to operational efficiencies.
+# - This reinforces the importance of analyzing both overall and city-specific performance.
+```
+
+---
+
+**Forecasting Attempt: ETS Model**  
+```{r}
+ets_model <- df_ts %>%
+  model(ETS(Total_Flight_Count))
+
+forecast_results <- ets_model %>%
+  forecast(h = 30)
+
+autoplot(forecast_results) +
+  facet_wrap(~Airline + Status) +
+  labs(title = "ETS Forecasted Flight Delays (Next 30 Days)",
+       y = "Total Delays", x = "Date")
+
+# Model accuracy
+accuracy(ets_model)
+
+# Check ETS model type
+report(ets_model)
+```
+
+---
+
+**Alternative Approach: ARIMA Model**  
+```{r}
+arima_model <- df_ts %>%
+  model(ARIMA(Total_Flight_Count))
+
+forecast_results_arima <- arima_model %>%
+  forecast(h = 30)
+
+autoplot(forecast_results_arima) +
+  facet_wrap(~Airline + Status) +
+  labs(title = "ARIMA Forecasted Flight Delays (Next 30 Days)",
+       y = "Total Delays", x = "Date")
+```
+
+---
+
+**Baseline Comparison: Naïve Forecasting**  
+```{r}
+naive_model <- df_ts %>%
+  model(NAIVE(Total_Flight_Count))
+
+forecast_results_naive <- naive_model %>%
+  forecast(h = 30)
+
+autoplot(forecast_results_naive) +
+  facet_wrap(~Airline + Status) +
+  labs(title = "Naïve Forecasted Flight Delays (Next 30 Days)",
+       y = "Total Delays", x = "Date")
+```
+
+---
+
+**Conclusion**  
+Predicting flight delays is challenging, and our analysis showed that traditional forecasting models struggle with accuracy. The ETS model failed due to high variability in the data, while ARIMA showed minor improvements but still lacked strong predictive power. Surprisingly, the simple Naïve model, which assumes tomorrow’s delays will be the same as today’s, performed just as well as the complex models. This suggests that past delays alone are not enough to predict future trends.
+
+A deeper look at city-by-city delays revealed that different airports experience varying levels of delays. Factors like **weather, airport congestion, and airline scheduling** likely have a major impact—something our dataset doesn’t capture.
+
+To improve delay predictions, we need **more detailed data**, including **weather conditions, time of day, and airport congestion levels**. Without these factors, time-series forecasting alone does not provide much value. Future work could explore machine learning models that incorporate additional variables to better understand what drives airline delays.
