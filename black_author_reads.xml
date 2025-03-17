@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<books>
+    <book>
+        <title>The Bluest Eye</title>
+        <authors>Toni Morrison</authors>
+        <genre>Literary Fiction</genre>
+        <publishedYear>1970</publishedYear>
+        <awards>None (But highly acclaimed)</awards>
+        <summary>A powerful novel about a young Black girl named Pecola Breedlove, who struggles with self-worth in a society that idolizes whiteness. Morrison’s debut novel explores themes of beauty, racism, and identity.</summary>
+    </book>
+    <book>
+        <title>Things Fall Apart</title>
+        <authors>Chinua Achebe</authors>
+        <genre>Historical Fiction, Tragedy</genre>
+        <publishedYear>1958</publishedYear>
+        <awards>None (But widely regarded as one of the greatest African novels)</awards>
+        <summary>The tragic story of Okonkwo, a respected leader in an Igbo village, whose life is upended by colonialism and internal struggles. Achebe’s masterpiece captures the clash between traditional African culture and European imperialism.</summary>
+    </book>
+    <book>
+        <title>Children of Blood and Bone</title>
+        <authors>Tomi Adeyemi</authors>
+        <genre>Young Adult Fantasy</genre>
+        <publishedYear>2018</publishedYear>
+        <awards>Andre Norton Award for Young Adult Science Fiction and Fantasy</awards>
+        <summary>A gripping fantasy novel inspired by West African mythology, where Zélie, a young divîner, fights to restore magic to her people while battling oppressive forces in the land of Orïsha.</summary>
+    </book>
+</books>
