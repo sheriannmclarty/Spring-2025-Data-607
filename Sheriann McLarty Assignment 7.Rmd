@@ -1,0 +1,203 @@
+---
+title: "Working with XML and JSON in R Assignment 7"
+author: "Sheriann McLarty"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Introduction
+
+This document demonstrates how to read and compare data from **HTML, XML, and JSON** files in R.  
+The dataset contains information about three fiction books.
+
+## Load Required Libraries
+
+```{r setup, message=FALSE, warning=FALSE}
+library(XML)      # For XML processing
+library(jsonlite) # For JSON processing
+library(rvest)    # For HTML scraping
+library(dplyr)    # For data manipulation
+```
+# Load Files from GitHub
+```{r}
+html_file <- "https://raw.githubusercontent.com/sheriannmclarty/Spring-2025-Data-607/Assignment-7/black_author_reads.html"
+xml_file <- "https://raw.githubusercontent.com/sheriannmclarty/Spring-2025-Data-607/Assignment-7/black_author_reads.xml"
+json_file <- "https://raw.githubusercontent.com/sheriannmclarty/Spring-2025-Data-607/Assignment-7/black_author_reads.json"
+
+```
+
+# Read HTML (From GitHub Hosting)
+```{r}
+html_text <- readLines(html_file, warn = FALSE) # Read as text
+html_data <- read_html(paste(html_text, collapse = "\n")) # Convert to HTML object
+# Extract the First Table from the HTML File
+html_table <- html_data %>% html_element("table") %>% html_table(fill = TRUE)
+
+# Convert Table to Data Frame
+black_author_reads_html <- as.data.frame(html_table)
+
+# Print the Extracted Data
+print(black_author_reads_html)
+```
+
+# Read XML (From GitHub Hosting)
+```{r}
+xml_text <- readLines(xml_file, warn = FALSE)
+xml_data <- xmlParse(paste(xml_text, collapse = "\n"))
+black_author_reads_xml <- xmlToDataFrame(xml_data)
+# Print to confirm extraction
+print(black_author_reads_xml)
+```
+
+
+# Read JSON (From Github)
+```{r}
+json_data <- fromJSON(json_file)
+# Extract the books data from JSON
+black_author_reads_json <- as.data.frame(json_data$books)
+# Print to confirm extraction
+print(black_author_reads_json)
+```
+## Compare Data Frames
+
+```{r compare-dataframes}
+# Convert columns to character type for accurate comparison
+black_author_html <- black_author_reads_html %>% mutate(across(everything(), as.character))
+black_author_xml <- black_author_reads_xml %>% mutate(across(everything(), as.character))
+black_author_json <- black_author_reads_json %>% mutate(across(everything(), as.character))
+
+# Check if all data frames are identical
+identical_html_xml <- identical(black_author_html, black_author_xml)
+identical_html_json <- identical(black_author_html, black_author_json)
+identical_xml_json <- identical(black_author_xml, black_author_json)
+
+# Print results
+cat("Are HTML and XML data frames identical? ", identical_html_xml, "\n")
+cat("Are HTML and JSON data frames identical? ", identical_html_json, "\n")
+cat("Are XML and JSON data frames identical? ", identical_xml_json, "\n")
+```
+
+*Compare Dataframes to make all three files become the same*
+
+```{r}
+## Compare Data Frames with Adjustments
+
+# Ensure consistent column names
+colnames(black_author_reads_html) <- colnames(black_author_reads_xml) <- colnames(black_author_reads_json)
+
+# Trim whitespace from all values
+black_author_reads_html <- black_author_reads_html %>% mutate(across(everything(), ~ trimws(as.character(.))))
+black_author_reads_xml <- black_author_reads_xml %>% mutate(across(everything(), ~ trimws(as.character(.))))
+black_author_reads_json <- black_author_reads_json %>% mutate(across(everything(), ~ trimws(as.character(.))))
+
+# Arrange rows to ensure order doesn't affect comparison
+black_author_reads_html <- black_author_reads_html %>% arrange_all()
+black_author_reads_xml <- black_author_reads_xml %>% arrange_all()
+black_author_reads_json <- black_author_reads_json %>% arrange_all()
+
+# Recheck if data frames are now identical
+identical_html_xml <- identical(black_author_reads_html, black_author_reads_xml)
+identical_html_json <- identical(black_author_reads_html, black_author_reads_json)
+identical_xml_json <- identical(black_author_reads_xml, black_author_reads_json)
+
+# Print results
+cat("Are HTML and XML data frames identical? ", identical_html_xml, "\n")
+cat("Are HTML and JSON data frames identical? ", identical_html_json, "\n")
+cat("Are XML and JSON data frames identical? ", identical_xml_json, "\n")
+
+
+```
+
+
+# Looking at the output, to see what's the diffrence between the three files
+
+```{r}
+str(black_author_reads_html)
+str(black_author_reads_xml)
+str(black_author_reads_json)
+```
+
+# Json Data format stores multiple authors and genre, convert Json columns to match
+
+```{r}
+## Read Data from JSON (Fix Nested Lists)
+
+# Load JSON file
+json_file <- "black_author_reads.json"  # Ensure the correct file extension
+json_data <- fromJSON(json_file)
+
+# Convert JSON list to dataframe
+black_author_reads_json <- json_data$books
+
+# Flatten authors and genres to match HTML/XML formats
+black_author_reads_json$authors <- sapply(black_author_reads_json$authors, paste, collapse = ", ")
+black_author_reads_json$genre <- sapply(black_author_reads_json$genre, paste, collapse = ", ")
+
+# Convert to dataframe
+black_author_reads_json <- as.data.frame(black_author_reads_json)
+
+# Display JSON data after correction
+print(black_author_reads_json)
+
+```
+
+# Rechecking the all three dataframes for identical likeness
+
+```{r}
+# Check if all data frames are identical
+identical_html_xml <- identical(black_author_reads_html, black_author_reads_xml)
+identical_html_json <- identical(black_author_reads_html, black_author_reads_json)
+identical_xml_json <- identical(black_author_reads_xml, black_author_reads_json)
+
+# Print results
+cat("Are HTML and XML data frames identical? ", identical_html_xml, "\n")
+cat("Are HTML and JSON data frames identical? ", identical_html_json, "\n")
+cat("Are XML and JSON data frames identical? ", identical_xml_json, "\n")
+
+```
+# Json file dataframe sorted
+
+```{r}
+## Final Data Cleaning for JSON
+
+# Ensure column names match
+colnames(black_author_reads_json) <- colnames(black_author_reads_html)
+
+# Trim whitespace from JSON data
+black_author_reads_json <- black_author_reads_json %>% mutate(across(everything(), ~ trimws(as.character(.))))
+
+# Convert publishedYear to character type for consistent comparison
+black_author_reads_json$publishedYear <- as.character(black_author_reads_json$publishedYear)
+
+# Sort rows by title to ensure order does not affect comparison
+black_author_reads_html <- black_author_reads_html %>% arrange(title)
+black_author_reads_json <- black_author_reads_json %>% arrange(title)
+black_author_reads_xml  <- black_author_reads_xml  %>% arrange(title)
+
+# Recheck if all data frames are now identical
+identical_html_xml <- identical(black_author_reads_html, black_author_reads_xml)
+identical_html_json <- identical(black_author_reads_html, black_author_reads_json)
+identical_xml_json <- identical(black_author_reads_xml, black_author_reads_json)
+
+# Print results
+cat("Are HTML and XML data frames identical? ", identical_html_xml, "\n")
+cat("Are HTML and JSON data frames identical? ", identical_html_json, "\n")
+cat("Are XML and JSON data frames identical? ", identical_xml_json, "\n")
+
+```
+
+
+# Conclusion
+
+We successfully extracted and standardized book data from HTML, XML, and JSON formats, ensuring they matched perfectly.
+
+
+***Key Takeaways***
+Extracted the data using rvest (HTML), XML (XML), and jsonlite (JSON).
+Fixed mismatches in column names, whitespace, and encoding issues.
+Flattened JSON lists for authors and genres to align with the other formats.
+Ran identical() checks and confirmed all three formats were identical after cleaning.
+
+***Final Thoughts***
+Data is messy, and different formats don’t always play by the same rules.
+Standardization is key—cleaning and wrangling made everything match up.
