@@ -1,0 +1,219 @@
+---
+title: "Chess Tournament Data Analysis"
+author: "Sheriann McLarty"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rsconnect)
+library(dplyr)
+library(readr)
+library(stringr)
+library(knitr)
+library(shiny)
+```
+**Introduction**
+
+***This project was all about turning messy text data into something structured and insightful. I was given a .txt file containing results from a chess tournament, and the goal was to extract the meaningful data—like each player's name, state, total number of points, pre-tournament rating, and the average pre-rating of all their opponents—and generate a clean .csv that could be used for analysis or imported into a SQL database.***
+
+***At first glance, the file looked chaotic. The information was technically structured, but it wasn’t in a straightforward format like a spreadsheet. This meant I had to write logic in R to parse out the right pieces, clean them up, and reorganize everything into something readable and consistent.***
+
+**Read and Process Tournament Data**
+```{r}
+# Read File
+file_path <- "tournamentinfo.txt"
+lines <- readLines(file_path, encoding = "UTF-8")
+
+
+# Remove separator lines
+lines <- lines[!grepl("^-{5,}", lines)]
+
+# Extract player-related lines (skip first 3 header lines)
+player_lines <- lines[4:length(lines)]
+
+# Extract every alternate line CORRECTLY
+player_data <- player_lines[seq(2, length(player_lines), 2)]  # Players
+rating_data <- player_lines[seq(1, length(player_lines), 2)]  # Ratings
+
+# Ensure equal row count
+min_rows <- min(length(player_data), length(rating_data))
+player_data <- player_data[1:min_rows]
+rating_data <- rating_data[1:min_rows]
+
+# Extract Player Information
+df <- tibble(
+  Rank = as.numeric(str_extract(player_data, "^\\s*\\d+")),  
+  Player = str_trim(str_match(player_data, "\\|\\s*([A-Za-z .'-]+?)\\s*\\|")[,2]),  
+  Total_Points = as.numeric(str_match(player_data, "\\|\\s*([0-9]+\\.?[0-9]*)\\s*\\|")[,2]),
+  Opponents = str_extract_all(player_data, "\\d{1,2}")  # Extract opponent numbers as a list
+)
+
+# Ensure all columns have the same number of rows
+num_rows <- min(length(df$Rank), length(df$Player), length(df$Total_Points), length(df$Opponents))
+df <- df[1:num_rows, ]
+
+# Extract Pre-Ratings from rating_data
+df$Pre_Rating <- as.numeric(str_match(rating_data, "R:\\s*([0-9]{3,4})")[,2])
+
+# Extract State from rating_data
+df$State <- str_trim(str_match(rating_data, "^\\s*([A-Z]{2})")[,2])
+
+# Check for missing values and issue warnings
+if (any(is.na(df$Pre_Rating))) {
+  warning("Some Pre_Rating values could not be extracted. Check input formatting.")
+  print(which(is.na(df$Pre_Rating)))
+}
+
+if (any(is.na(df$Total_Points))) {
+  warning(" Some Total_Points values could not be extracted. Check input formatting.")
+  print(which(is.na(df$Total_Points)))
+}
+
+# Print first 10 rows to verify
+print(head(df, 10))
+```
+
+**Calculate Average Opponent Rating**
+```{r}
+# Convert Opponents column into a list of numeric values
+df$Opponents <- lapply(df$Opponents, function(x) as.numeric(unlist(x)))
+
+# Create a lookup table for ratings
+rating_lookup <- setNames(df$Pre_Rating, df$Rank)
+
+# Calculate the average opponent rating
+df$Avg_Opponent_Pre_Rating <- sapply(df$Opponents, function(opp) {
+  opp_ratings <- as.numeric(rating_lookup[as.character(opp)])
+  mean(opp_ratings, na.rm = TRUE)  # Get the average, ignoring NAs
+})
+
+# Print first 10 rows to verify
+print(head(df, 10))
+```
+
+**Rank Players by Performance**
+```{r}
+# Rank players by Total_Points, then Avg_Opponent_Rating (tie-breakers)
+df <- df[order(-df$Total_Points, -df$Avg_Opponent_Pre_Rating), ]
+
+# Assign new ranking
+df$Final_Rank <- 1:nrow(df)
+
+# Print updated rankings
+print(head(df, 10))
+```
+
+**Export Cleaned Data to CSV**
+
+***After preparing the final dataset, I exported it to a CSV. I then created a SQL script to generate a table and load the CSV into a MySQL database. There were a few permissions issues (thank you --secure-file-priv), but I was able to work around them and confirm all 63 players were loaded correctly.***
+
+```{r}
+# Select important columns including State for database import
+final_table <- df[, c("Final_Rank", "Player", "State", "Total_Points", "Pre_Rating", "Avg_Opponent_Pre_Rating")]
+
+# Export CSV
+write.csv(final_table, "chess_tournament_results.csv", row.names = FALSE)
+
+# Print confirmation
+print("✅ CSV file 'chess_tournament_results.csv' has been successfully created.")
+```
+
+
+#Data Cleaning & Processing***
+
+***One of the trickier parts was aligning the player lines with their corresponding rating lines. Once aligned, I used regular expressions to pull out what I needed. I then used those opponent IDs to match players and compute each person’s average opponent rating.***
+
+
+**Visualize Data**
+
+***With a clean dataset in hand, I created a few visualizations using ggplot2 to highlight top performers and explore relationships in the data. For example:A bar chart showing the top 10 players by total points.A scatter plot showing how a player’s pre-rating compared to the average rating of their opponents.I also added a Shiny app so the data could be explored interactively. Users can filter players by rating and view individual stats, making the data more dynamic and useful for quick insights.***
+
+
+```{r}
+library(ggplot2)
+
+# Bar plot of top 10 players by Total Points
+ggplot(head(df, 10), aes(x = reorder(Player, -Total_Points), y = Total_Points, fill = as.factor(Final_Rank))) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top 10 Players by Points", x = "Player", y = "Total Points") +
+  theme_minimal()
+```
+
+
+# **Interactive Data w. shiny **
+
+```{r}
+ggplot(data = df, aes(x = Pre_Rating, y = Avg_Opponent_Pre_Rating, color = Total_Points)) +
+  geom_point(size = 3) +
+  labs(title = "Pre-Rating vs. Average Opponent Pre-Rating", x = "Pre-Rating", y = "Avg Opponent Pre-Rating") +
+  theme_minimal()
+```
+
+
+
+```{r, eval=FALSE}
+# Rpubs dont allow interactive data
+
+library(shiny)
+library(ggplot2)
+library(dplyr)
+
+# UI: Sidebar with inputs
+ui <- fluidPage(
+    titlePanel("Chess Tournament Analysis"),
+    sidebarLayout(
+        sidebarPanel(
+            selectInput("player", "Select Player:", choices = unique(df$Player), selected = unique(df$Player)[1]),
+            sliderInput("minRating", "Minimum Rating:", min = min(df$Pre_Rating), max = max(df$Pre_Rating), value = min(df$Pre_Rating))
+        ),
+        mainPanel(
+            plotOutput("ratingPlot"),
+            tableOutput("playerStats")
+        )
+    )
+)
+
+# SERVER: Dynamic filtering & plotting
+server <- function(input, output) {
+    filteredData <- reactive({
+      df$Player <- trimws(df$Player)  # Remove extra spaces
+    df$Player <- as.character(df$Player)  # Ensure it's a character
+        df %>% filter(Pre_Rating >= input$minRating)
+    })
+
+    output$ratingPlot <- renderPlot({
+        ggplot(filteredData(), aes(x = Pre_Rating, y = Avg_Opponent_Pre_Rating, color = Total_Points)) +
+            geom_point(size = 3) +
+            labs(title = "Pre-Rating vs. Avg Opponent Pre-Rating", x = "Pre-Rating", y = "Avg Opponent Pre-Rating") +
+            theme_minimal()
+    })
+
+    output$playerStats <- renderTable({
+    req(input$player)  # Ensure input is not empty
+    filtered_df <- df %>% filter(Player == input$player)
+
+    if (nrow(filtered_df) == 0) {
+        return(data.frame(Message = "No data found for this player"))
+    }
+
+    # Select only existing columns
+    filtered_df %>% select(any_of(c("Player", "State", "Total_Points", "Pre_Rating", "Avg_Opponent_Pre_Rating")))
+})
+
+}
+
+# Run the app
+shinyApp(ui, server)
+
+```
+
+**Reflection**
+
+***This project taught me how to wrangle semi-structured text data and bring it to life. I went from a plain .txt file that looked like gibberish to a working SQL-ready table, a downloadable CSV, clear visualizations, and even an interactive Shiny dashboard. Every part of the workflow had its own challenge—especially extracting and aligning the data—but it was satisfying to see it all come together.***
+
+***If I had more time, I’d probably explore how performance correlates with other metrics like number of games played or opponent diversity. I’d also look into deploying the Shiny app or visualizations online, just to make it more accessible.***
