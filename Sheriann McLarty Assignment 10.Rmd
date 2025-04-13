@@ -1,0 +1,89 @@
+---
+title: "Sentiment Analysis with Tidytext – Custom Corpus"
+author: "Sheriann McLarty"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    theme: flatly
+    highlight: tango
+  pdf_document:
+    toc: true
+    toc_depth: '2'
+---
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidytext)
+library(textdata)
+library(janeaustenr)
+library(wordcloud)
+library(ggplot2)
+library(dplyr)
+```
+
+## Introduction
+
+This analysis builds on the example provided in *Text Mining with R* by Julia Silge and David Robinson, Chapter 2 (Sentiment Analysis).  
+<https://www.tidytextmining.com/sentiment.html>
+
+##  Custom Corpus Quote from The Office
+We’ll use this sarcastic and iconic line from Oscar Martinez as our custom text corpus:
+
+> "Well, this is what happened. Ryan's big project was the website, which wasn't doing so well. So Ryan, to give the impression of sales, recorded them twice. Once as office sales and once in the website sales, which is what we refer to in the business as 'misleading the shareholders.' Another good term is 'fraud.' The real crime, I think, was the beard."
+
+```{r quote-data}
+quote_df <- data.frame(
+  line = 1,
+  text = "Well, this is what happened. Ryan's big project was the website, which wasn't doing so well. So Ryan, to give the impression of sales, recorded them twice. Once as office sales and once in the website sales, which is what we refer to in the business as 'misleading the shareholders.' Another good term is 'fraud.' The real crime, I think, was the beard."
+)
+```
+
+## Tokenize & Remove Stop Words
+```{r tidy-text}
+data("stop_words")
+
+# Load lexicons once for reuse
+bing <- get_sentiments("bing")
+nrc <- get_sentiments("nrc")
+
+tidy_quote <- quote_df %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words)
+```
+
+## Sentiment Analysis with Bing
+```{r bing-sentiment}
+bing_sentiment <- tidy_quote %>%
+  inner_join(bing, by = "word") %>%
+  count(word, sentiment, sort = TRUE)
+
+bing_sentiment %>%
+  ggplot(aes(x = reorder(word, n), y = n, fill = sentiment)) +
+  geom_col(show.legend = TRUE) +
+  coord_flip() +
+  scale_fill_manual(values = c("negative" = "firebrick", "positive" = "darkgreen")) +
+  labs(title = "Sentiment of Oscar's Quote (Bing Lexicon)",
+       x = NULL, y = "Word Frequency") +
+  theme_minimal()
+```
+
+## Sentiment Analysis with NRC
+```{r nrc-sentiment}
+nrc_sentiment <- tidy_quote %>%
+  inner_join(nrc, by = "word") %>%
+  count(sentiment, sort = TRUE)
+
+nrc_sentiment %>%
+  ggplot(aes(x = reorder(sentiment, n), y = n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  scale_fill_brewer(palette = "Set3") +
+  labs(title = "Emotions Detected in Oscar's Quote (NRC Lexicon)",
+       y = "Word Frequency", x = "Emotion") +
+  theme_minimal()
+
+```
+
+## Reflection
+Using this quote from The Office was intentional — it's a satirical breakdown of fraud, accountability, and office politics, all in one paragraph. Sentiment analysis clearly flagged words like “fraud,” “misleading,” and “crime” as negative in both the Bing and NRC lexicons, which aligns with the serious-sounding language Oscar uses. But what it misses is the tone — the sarcasm, the dry humor, the sting in “the real crime was the beard.” This shows how sentiment tools can capture emotion, but not always nuance. It’s a reminder that while sentiment analysis is powerful, human context still matters.
