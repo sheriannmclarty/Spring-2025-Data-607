@@ -1,0 +1,291 @@
+---
+title: 'Project 2: Data Tidying and Analysis'
+author: "Sheriann McLarty"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+
+library(tidyverse)
+library(readxl)
+library(janitor)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(kableExtra)
+```
+
+## Introduction
+This project showcases the transformation of three different wide-format datasets — all initially messy, inconsistent, or incomplete — into clean, structured, analysis-ready formats. Using R tools like pivot_longer(), filter(), and clean_names(), I walk through how each dataset was tidied and what insights were made possible after the transformation.
+
+## Dataset 1: PRAMS (Pregnancy Risk Assessment Monitoring System)
+Summary: To make sense of wide-format PRAMS data, I used pivot_longer() to transform multiple measurement columns (prevalence and confidence intervals) into a long, tidy structure. This allowed for a dynamic faceted line plot showing changes over time across different maternal health questions. I focused on the six most prevalent questions to avoid clutter and maximize insight. The facet layout separates prevalence from confidence intervals, which helps the viewer focus on patterns in each metric without distraction. This approach highlights not just what’s common — but how it has changed year to year.
+
+Fix: I used pivot_longer() to reshape the data from wide to long format and stacked the percentage columns to make them easier to analyze.
+
+Step 1: Load and Clean Column Names
+
+```{r}
+prams <- read_csv("Pregnancy_Risk_Assessment_Monitoring_System__PRAMS__20250323.csv") %>%
+  clean_names()
+```
+
+Step 2: Tidy the Dataset
+
+```{r}
+prams_long <- prams %>%
+  pivot_longer(cols = c(prevalence_percent,
+                        lower_95_percent_confidence_interval,
+                        upper_95_percent_confidence_interval),
+               names_to = "measure",
+               values_to = "value") %>%
+  filter(!is.na(value))
+```
+
+Step 3: Summarize by Mean Value
+
+```{r}
+prams_summary <- prams_long %>%
+  group_by(year, question, measure) %>%
+  summarize(mean_value = mean(value, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(mean_value))
+
+kable(head(prams_summary, 10))
+```
+
+## PRAMS Visualizations
+
+```{r prams-top-questions-trend, fig.width=10, fig.height=6}
+# Identify top 6 questions based on average prevalence
+top_questions <- prams_summary %>%
+  filter(measure == "prevalence_percent") %>%
+  top_n(6, mean_value) %>%
+  pull(question)
+
+# Filter the long-format data to just those top questions
+prams_plot_data <- prams_long %>%
+  filter(question %in% top_questions)
+
+# Create the plot
+ggplot(prams_plot_data, aes(x = year, y = value, color = question)) +
+  geom_line(size = 1.1) +
+  geom_point(size = 2) +
+  facet_wrap(~ measure, scales = "free_y") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  labs(
+    title = "Trends in Maternal Health Indicators (Top 6 Questions)",
+    subtitle = "Data from PRAMS Survey (Multiple Measures)",
+    x = "Year",
+    y = "Value (%)",
+    color = "Survey Question",
+    caption = "Source: CDC PRAMS, 2023"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 12, color = "gray40"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom",
+    strip.text = element_text(face = "bold")
+  )
+```
+
+## Dataset 2: DHS Referral Outcomes
+Summary: Originally, I visualized the overall distribution of assistance types, but this didn’t show how different populations interacted with the system. So I extended the analysis by breaking referrals down by gender. Using a grouped bar chart, I visualized the proportion of referrals for each assistance type across genders. This helps identify disparities in service access or need, such as whether one gender is more likely to receive specific types of support. Adding labels and a clean horizontal layout made the insights immediately digestible
+
+Fix: I used clean_names() to standardize columns and filtered out rows with missing client_key. Then I summarized by assistance type.
+
+Step 1: Load, Clean, and Filter
+```{r}
+homeless <- read_csv("homeless_prep.csv") %>%
+  clean_names() %>%
+  filter(!is.na(client_key))
+
+kable(head(homeless, 10))
+```
+
+Step 2: Summarize Assistance Type
+```{r}
+homeless_summary <- homeless %>%
+  group_by(assistancetype) %>%
+  count() %>%
+  arrange(desc(n))
+
+kable(head(homeless_summary, 10))
+```
+
+Step 3: Transform to Proportions
+```{r}
+homeless_prop <- homeless_summary %>%
+  mutate(percent = round(100 * n / sum(n), 1))
+
+kable(homeless_prop)
+```
+
+Step 4: 
+
+## Visualize Assistance Distribution
+
+```{r dhs-assistance-barplot-clean, fig.width=9, fig.height=6}
+ggplot(homeless_prop, aes(x = reorder(assistancetype, percent), y = percent)) +
+  geom_col(fill = "#1f77b4") +
+  geom_text(aes(label = paste0(percent, "%")), hjust = -0.1, size = 3.5) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  labs(
+    title = "DHS Assistance Types by Referral Proportion",
+    subtitle = "Most Common Referral Types in Homeless Dataset",
+    x = "Assistance Type",
+    y = "Percentage of Total",
+    caption = "Source: NYC DHS Referral Data"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 11, color = "gray40"),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.text.y = element_text(size = 10),
+    plot.caption = element_text(size = 9, face = "italic"),
+    panel.grid.major.y = element_blank()
+  ) +
+  coord_flip()
+
+```
+## Referral Gender Breakdown
+```{r dhs-referral-gender-breakdown, fig.width=10, fig.height=6}
+# Group by gender and assistance type to calculate percentages
+homeless_gender_prop <- homeless %>%
+  filter(!is.na(gender), !is.na(assistancetype)) %>%
+  group_by(gender, assistancetype) %>%
+  summarize(count = n(), .groups = "drop") %>%
+  group_by(gender) %>%
+  mutate(percent = round(100 * count / sum(count), 1))
+
+# Plot with gender comparison
+ggplot(homeless_gender_prop, aes(x = reorder(assistancetype, percent), y = percent, fill = gender)) +
+  geom_col(position = "dodge") +
+  geom_text(
+    aes(label = paste0(percent, "%")),
+    position = position_dodge(width = 0.9),
+    vjust = -0.25,
+    size = 3
+  ) +
+  labs(
+    title = "DHS Referrals by Gender and Assistance Type",
+    subtitle = "Comparison of Referral Distribution by Gender",
+    x = "Assistance Type",
+    y = "Percentage",
+    fill = "Gender",
+    caption = "Source: NYC DHS Referral Dataset"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 11, color = "gray40"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom",
+    panel.grid.major.x = element_blank()
+  )
+```
+
+
+## Dataset 3: Breast Cancer Cases (2020–2024)
+Summary:The breast cancer dataset required a full restructuring due to messy year columns and missing headers. After cleaning and reshaping with pivot_longer(), I used faceted bar plots to show case trends by age group across five years. This allowed us to spotlight which age groups had consistently high or fluctuating case counts. I also created a separate line chart of total cases per year to give a big-picture view of overall incidence. These visuals complement each other — one breaks it down by age, the other tells the story across time
+Fix: I renamed the columns manually, reshaped the dataset using pivot_longer(), and visualized cases by year and age group.
+
+Step 1: Load, Clean, and Rename Columns
+```{r}
+untidy <- read_excel("Untidydataset _624.xlsx", sheet = 1) %>%
+  clean_names()
+
+colnames(untidy) <- c("patient_id", "month", "age_group", "race",  
+                      "cases_2020", "cases_2021", "cases_2022", "cases_2023", "cases_2024",
+                      "total_patients", "type")
+
+kable(head(untidy, 10))
+```
+
+Step 2: Reshape Year Columns to Long Format
+```{r}
+untidy_long <- untidy %>%
+  pivot_longer(cols = starts_with("cases_"),
+               names_to = "year",
+               values_to = "cases") %>%
+  mutate(year = str_remove(year, "cases_")) %>%
+  drop_na(cases)
+```
+## Visualizations Breast Cancer Cases
+Step 3: Visualize with ggplot2
+```{r breast-cancer-cases-by-age, fig.width=10, fig.height=6}
+ggplot(untidy_long, aes(x = year, y = cases)) +
+  geom_col(fill = "#FF6F61", width = 0.7) +
+  facet_wrap(~ age_group, scales = "free_y") +
+  geom_text(aes(label = cases), vjust = -0.2, size = 3, color = "black") +
+  labs(
+    title = "Breast Cancer Cases by Age Group (2020–2024)",
+    subtitle = "Case Counts Grouped by Age Across Years",
+    x = "Year",
+    y = "Number of Cases",
+    caption = "Source: NYC Health Breast Cancer Dataset"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 11, color = "gray40"),
+    axis.text.x = element_text(angle = 0),
+    strip.text = element_text(face = "bold", size = 11),
+    panel.grid.major.x = element_blank()
+  )
+
+```
+
+Step 4: Yearly Totals Transformation
+
+```{r calculate-yearly-totals}
+yearly_totals <- untidy_long %>%
+  mutate(cases = as.numeric(cases)) %>%
+  group_by(year) %>%
+  summarize(total_cases = sum(cases, na.rm = TRUE)) %>%
+  arrange(desc(total_cases))
+```
+
+```{r breast-cancer-yearly-totals, fig.width=8, fig.height=5}
+
+ggplot(yearly_totals, aes(x = year, y = total_cases, group = 1)) +
+  geom_line(color = "#D72638", size = 1.2) +
+  geom_point(size = 2.5, color = "#D72638") +
+  geom_text(aes(label = total_cases), vjust = -0.5, size = 3.5) +
+  labs(
+    title = "Total Breast Cancer Cases by Year",
+    subtitle = "Aggregated Across All Age Groups",
+    x = "Year",
+    y = "Total Cases",
+    caption = "Source: NYC Health Breast Cancer Dataset"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 11, color = "gray40"),
+    panel.grid.minor = element_blank()
+  )
+
+```
+
+## Reflection
+Throughout this project, I gained a much deeper appreciation for the role data wrangling plays in actual analysis. Each dataset had its own set of issues — and none of them were ready to use out-of-the-box.
+
+I learned how important it is to approach messy data with both strategy and patience. From inconsistent headers to multi-year wide formats, every issue required its own combination of janitor, tidyr, and dplyr tools to resolve.
+
+Across all three datasets, visualization wasn’t just the final step — it was a diagnostic tool. The plots revealed patterns, gaps, and outliers that would be missed in raw tables alone. By reshaping the data into long format and visualizing it with ggplot2, I transformed messy data into clear narratives. Whether it was maternal health trends, gender-based service usage, or age-driven cancer incidence, each plot was chosen to maximize interpretability and real-world relevance.
