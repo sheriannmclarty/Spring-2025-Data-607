@@ -24,4 +24,9 @@ This project demonstrates how to clean, transform, and visualize messy wide-form
 
 The final report includes:
 - Cleaned versions of each dataset
-- V
+- Visualizations with narrative context
+- Reflection on challenges and insights from the tidying process
+  
+## 🔗 View the Full HTML Report
+
+[Click here to view on RPubs](http://rpubs.com/SheriannMc/1311921)
